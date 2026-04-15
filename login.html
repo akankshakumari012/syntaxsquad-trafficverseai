@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrafficVerse Login</title>
+
+<style>
+:root {
+  --bg: #ffffff;
+  --card: #ffffff;
+  --text: #333;
+  --accent: #ff7a00;
+  --input-border: #ddd;
+}
+
+body.dark {
+  --bg: #1e1e1e;
+  --card: #2b2b2b;
+  --text: #fff;
+  --input-border: #555;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", sans-serif;
+  background: linear-gradient(135deg, var(--bg) 60%, #ffe5cc);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  transition: 0.4s;
+}
+
+/* Toggle */
+.toggle {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+}
+
+/* Card */
+.container {
+  width: 350px;
+  background: var(--card);
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  text-align: center;
+  animation: fadeIn 1s ease;
+}
+
+/* Logo */
+.logo {
+  font-size: 26px;
+  font-weight: bold;
+  color: var(--accent);
+}
+
+.tagline {
+  font-size: 12px;
+  color: gray;
+  margin-bottom: 15px;
+}
+
+/* Input */
+.input-box {
+  position: relative;
+  margin: 20px 0;
+}
+
+.input-box input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid var(--input-border);
+  border-radius: 8px;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+}
+
+.input-box input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(255,122,0,0.4);
+}
+
+.input-box label {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  color: #aaa;
+  transition: 0.3s;
+  background: var(--card);
+  padding: 0 5px;
+}
+
+.input-box input:focus + label,
+.input-box input:valid + label {
+  top: -8px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+/* Button */
+button.login {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  background: linear-gradient(45deg, #ff7a00, #ff9a3c);
+  color: white;
+  font-size: 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+button.login:hover {
+  transform: scale(1.05);
+}
+
+/* Error */
+.error {
+  color: red;
+  font-size: 13px;
+  display: none;
+}
+
+@keyframes fadeIn {
+  from {opacity:0; transform: translateY(30px);}
+  to {opacity:1; transform: translateY(0);}
+}
+</style>
+</head>
+
+<body>
+
+<button class="toggle" onclick="toggleMode()">🌙 Dark</button>
+
+<div class="container">
+
+  <!-- Logo + Name -->
+  <div class="logo">🚦 TrafficVerse</div>
+  <div class="tagline">Smart Traffic Simulation Platform</div>
+
+  <div class="input-box">
+    <input type="text" id="reg" required>
+    <label>Register Number</label>
+  </div>
+
+  <div class="input-box">
+    <input type="text" id="vehicle" required>
+    <label>Vehicle Number</label>
+  </div>
+
+  <p class="error" id="errorMsg">Please fill all fields correctly</p>
+
+  <button class="login" onclick="login()" id="loginBtn">Login</button>
+
+</div>
+
+<script>
+function toggleMode() {
+  document.body.classList.toggle("dark");
+  let btn = document.querySelector(".toggle");
+  btn.innerText = document.body.classList.contains("dark") ? "☀️ Light" : "🌙 Dark";
+}
+
+function login() {
+  let reg = document.getElementById("reg").value.trim();
+  let vehicle = document.getElementById("vehicle").value.trim();
+  let error = document.getElementById("errorMsg");
+  let btn = document.getElementById("loginBtn");
+
+  if (reg === "" || vehicle === "") {
+    error.style.display = "block";
+    return;
+  }
+
+  let pattern = /^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/;
+
+  if (!pattern.test(vehicle)) {
+    error.innerText = "Invalid Vehicle Number (e.g. MH12AB1234)";
+    error.style.display = "block";
+    return;
+  }
+
+  error.style.display = "none";
+
+  btn.innerText = "Logging in...";
+  btn.style.opacity = "0.7";
+
+  setTimeout(() => {
+    btn.innerText = "Success ✅";
+    btn.style.background = "green";
+  }, 1500);
+}
+</script>
+
+</body>
+</html>
