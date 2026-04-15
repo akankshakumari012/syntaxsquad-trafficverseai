@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TraffiVerse AI — Admin Panel</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    /* ── Admin Layout ── */
+    .admin-layout {
+      display: flex;
+      min-height: 100vh;
+      padding-top: 65px; /* nav height */
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 240px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 1.5rem 1rem;
+      position: fixed;
+      top: 65px; left: 0; bottom: 0;
+      overflow-y: auto;
+      z-index: 100;
+      transition: background var(--transition);
+    }
+
+    .sidebar-section { margin-bottom: 1.75rem; }
+    .sidebar-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      padding: 0 0.75rem;
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+
+    .sidebar-nav { list-style: none; }
+    .sidebar-nav li { margin-bottom: 0.25rem; }
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.75rem;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      transition: all var(--transition);
+    }
+    .sidebar-nav a:hover, .sidebar-nav a.active {
+      background: var(--orange-glow);
+      color: var(--orange);
+    }
+    .sidebar-nav .nav-icon { font-size: 1.1rem; }
+
+    /* Signal status widget in sidebar */
+    .sidebar-signal {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      text-align: center;
+    }
+    .sidebar-signal-val {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 800;
+      margin-top: 0.5rem;
+    }
+    .sidebar-signal-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+    /* ── Main Content ── */
+    .admin-main {
+      margin-left: 240px;
+      flex: 1;
+      padding: 2rem;
+      max-width: 100%;
+    }
+
+    /* Page Header */
+    .admin-page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+    }
+    .admin-page-title {
+      font-size: 1.6rem;
+      font-weight: 800;
+      font-family: 'Syne', sans-serif;
+    }
+    .admin-page-sub { font-size: 0.88rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+    /* Stats Row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    /* Chart-like bars */
+    .signal-chart {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+      height: 80px;
+      padding: 0.5rem 0;
+    }
+    .chart-bar-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; flex: 1; }
+    .chart-bar {
+      width: 100%;
+      border-radius: 6px 6px 0 0;
+      transition: height 0.8s cubic-bezier(0.4,0,0.2,1);
+      min-height: 4px;
+    }
+    .chart-bar.bar-green  { background: linear-gradient(180deg, #00C853, #00962F); }
+    .chart-bar.bar-yellow { background: linear-gradient(180deg, #FFB800, #D49900); }
+    .chart-bar.bar-red    { background: linear-gradient(180deg, #FF2D2D, #C0000E); }
+    .chart-bar-label { font-size: 0.72rem; color: var(--text-muted); font-weight: 600; }
+    .chart-bar-val   { font-size: 0.78rem; font-weight: 700; color: var(--text); }
+
+    /* Content grid */
+    .admin-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Panel */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+    .panel-body { padding: 1.5rem; }
+    .panel-body-flush { padding: 0; }
+
+    /* Table wrapper */
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    /* Heat Map */
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .heatmap-cell {
+      aspect-ratio: 1;
+      border-radius: 4px;
+      background: var(--gray-100);
+      transition: background 0.5s;
+      cursor: pointer;
+      position: relative;
+    }
+    .heatmap-cell:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: 110%; left: 50%; transform: translateX(-50%);
+      background: #111;
+      color: #fff;
+      font-size: 0.7rem;
+      padding: 3px 7px;
+      border-radius: 5px;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Activity timeline */
+    .timeline { display: flex; flex-direction: column; gap: 0; }
+    .timeline-item {
+      display: flex;
+      gap: 1rem;
+      padding: 0.875rem 0;
+      border-bottom: 1px solid var(--border);
+      align-items: flex-start;
+      font-size: 0.87rem;
+    }
+    .timeline-item:last-child { border-bottom: none; }
+    .timeline-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      margin-top: 5px;
+      flex-shrink: 0;
+    }
+    .dot-green  { background: var(--green); }
+    .dot-yellow { background: var(--yellow); }
+    .dot-red    { background: var(--red); }
+    .dot-emr    { background: #FF2D2D; box-shadow: 0 0 6px rgba(255,45,45,0.6); }
+    .timeline-body { flex: 1; }
+    .timeline-title { font-weight: 600; color: var(--text); }
+    .timeline-sub   { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.1rem; }
+    .timeline-time  { font-size: 0.75rem; color: var(--gray-400); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 2rem;
+      color: var(--text-muted);
+    }
+    .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+    .empty-state-text { font-size: 0.9rem; }
+
+    /* Refresh button spin */
+    @keyframes refresh-spin {
+      to { transform: rotate(360deg); }
+    }
+    .refreshing { animation: refresh-spin 0.8s linear infinite; display: inline-block; }
+
+    /* Map admin */
+    #map-admin { height: 280px; }
+
+    /* Congestion badge */
+    .congestion-score {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .congestion-ring {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Syne', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 800;
+      position: relative;
+    }
+    .ring-low    { background: conic-gradient(#00C853 0%, #00C85340 100%); color: #00C853; }
+    .ring-medium { background: conic-gradient(#FFB800 0%, #FFB80040 100%); color: #D49900; }
+    .ring-high   { background: conic-gradient(#FF2D2D 0%, #FF2D2D40 100%); color: #FF2D2D; }
+    .ring-inner {
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      background: var(--surface);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+      font-weight: 800;
+      font-family: 'Syne', sans-serif;
+      color: var(--text);
+    }
+
+    /* Responsive */
+    @media (max-width: 1100px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .admin-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .admin-main { margin-left: 0; padding: 1rem; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Alert Banner -->
+<div id="alertBanner" class="alert-banner" role="alert">
+  <div class="alert-icon">🚦</div>
+  <div class="alert-content">
+    <div class="alert-title" id="alertTitle">Alert</div>
+    <div class="alert-msg"   id="alertMsg">—</div>
+  </div>
+  <button class="alert-close" id="alertClose">✕</button>
+</div>
+
+<!-- ══ NAV ══════════════════════════════════════════════════ -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">
+      <div class="nav-logo-icon">🚦</div>
+      Traffi<span>Verse</span> AI
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html">Simulator</a></li>
+      <li><a href="#" class="active">Admin Panel</a></li>
+    </ul>
+    <div class="nav-actions">
+      <button class="theme-toggle" aria-label="Toggle theme">🌙</button>
+      <a href="index.html" class="btn btn-outline btn-sm">← Back to Sim</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ══ LAYOUT ════════════════════════════════════════════════ -->
+<div class="admin-layout">
+
+  <!-- ── Sidebar ─────────────────────────────────────────── -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <span class="sidebar-label">Main</span>
+      <ul class="sidebar-nav">
+        <li><a href="#overview"   class="active"><span class="nav-icon">📊</span> Overview</a></li>
+        <li><a href="#events"    ><span class="nav-icon">📋</span> Events Log</a></li>
+        <li><a href="#analytics" ><span class="nav-icon">📈</span> Analytics</a></li>
+        <li><a href="#map-section"><span class="nav-icon">🗺️</span> Live Map</a></li>
+      </ul>
+    </div>
+
+    <div class="sidebar-section">
+      <span class="sidebar-label">Emergency</span>
+      <ul class="sidebar-nav">
+        <li><a href="#emergency"><span class="nav-icon">🚑</span> Ambulance Log</a></li>
+        <li><a href="index.html"><span class="nav-icon">⚡</span> Run Simulation</a></li>
+      </ul>
+    </div>
+
+    <!-- Live Signal Status -->
+    <div class="sidebar-section">
+      <span class="sidebar-label">Current Signal</span>
+      <div class="sidebar-signal">
+        <div id="sidebarSignalLight" style="font-size:2rem">🟢</div>
+        <div class="sidebar-signal-val" id="sidebarSignalVal">GREEN</div>
+        <div class="sidebar-signal-sub" id="sidebarSignalSub">Last updated just now</div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── Main ──────────────────────────────────────────────── -->
+  <main class="admin-main">
+
+    <!-- Page Header -->
+    <div class="admin-page-header" id="overview">
+      <div>
+        <div class="admin-page-title">Traffic Dashboard</div>
+        <div class="admin-page-sub">Real-time overview of all traffic events</div>
+      </div>
+      <div style="display:flex;gap:0.75rem;align-items:center">
+        <span id="lastUpdated" style="font-size:0.8rem;color:var(--text-muted)">—</span>
+        <button class="btn btn-outline btn-sm" onclick="refreshData()">
+          <span id="refreshIcon">↻</span> Refresh
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="clearAllData()">🗑 Clear Data</button>
+      </div>
+    </div>
+
+    <!-- ── Stats Row ── -->
+    <div class="stats-row">
+      <div class="stat-card animate-fade-up delay-1">
+        <div class="stat-icon">🚗</div>
+        <div class="stat-value" id="statTotal">0</div>
+        <div class="stat-label">Total Events</div>
+        <div class="stat-delta up" id="statDeltaTotal">↑ Loading…</div>
+      </div>
+      <div class="stat-card animate-fade-up delay-2">
+        <div class="stat-icon">📊</div>
+        <div class="stat-value" id="statAvg">0</div>
+        <div class="stat-label">Avg Vehicles/Event</div>
+        <div class="stat-delta" id="statDeltaAvg">—</div>
+      </div>
+      <div class="stat-card animate-fade-up delay-3">
+        <div class="stat-icon">🚑</div>
+        <div class="stat-value" id="statAmb">0</div>
+        <div class="stat-label">Emergency Events</div>
+        <div class="stat-delta down" id="statDeltaAmb">—</div>
+      </div>
+      <div class="stat-card animate-fade-up delay-4">
+        <div class="stat-icon">🔴</div>
+        <div class="stat-value" id="statRed">0</div>
+        <div class="stat-label">RED Signal Events</div>
+        <div class="stat-delta" id="statDeltaRed">—</div>
+      </div>
+    </div>
+
+    <!-- ── Admin Grid: Table + Sidebar Panels ── -->
+    <div class="admin-grid" id="events">
+
+      <!-- Events Table -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">📋 Traffic Events Log</span>
+          <div style="display:flex;gap:0.5rem;align-items:center">
+            <select id="filterSignal" class="input-field" style="padding:0.4rem 0.7rem;font-size:0.82rem;width:auto" onchange="applyFilter()">
+              <option value="">All Signals</option>
+              <option value="GREEN">🟢 GREEN</option>
+              <option value="YELLOW">🟡 YELLOW</option>
+              <option value="RED">🔴 RED</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;cursor:pointer">
+              <input type="checkbox" id="filterAmb" onchange="applyFilter()"> 🚑 Only EMR
+            </label>
+          </div>
+        </div>
+        <div class="panel-body-flush">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Time</th>
+                  <th>Vehicles</th>
+                  <th>Signal</th>
+                  <th>Congestion</th>
+                  <th>Type</th>
+                  <th>Location</th>
+                </tr>
+              </thead>
+              <tbody id="eventsTableBody">
+                <tr>
+                  <td colspan="7">
+                    <div class="empty-state">
+                      <div class="empty-state-icon">📡</div>
+                      <div class="empty-state-text">Loading events…</div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column -->
+      <div style="display:flex;flex-direction:column;gap:1.25rem">
+
+        <!-- Signal Distribution Chart -->
+        <div class="panel" id="analytics">
+          <div class="panel-header">
+            <span class="panel-title">📈 Signal Distribution</span>
+          </div>
+          <div class="panel-body">
+            <div class="signal-chart" id="signalChart">
+              <div class="chart-bar-wrap">
+                <div class="chart-bar-val" id="chartGreenVal">0</div>
+                <div class="chart-bar bar-green" id="chartGreenBar" style="height:4px"></div>
+                <div class="chart-bar-label">GREEN</div>
+              </div>
+              <div class="chart-bar-wrap">
+                <div class="chart-bar-val" id="chartYellowVal">0</div>
+                <div class="chart-bar bar-yellow" id="chartYellowBar" style="height:4px"></div>
+                <div class="chart-bar-label">YELLOW</div>
+              </div>
+              <div class="chart-bar-wrap">
+                <div class="chart-bar-val" id="chartRedVal">0</div>
+                <div class="chart-bar bar-red" id="chartRedBar" style="height:4px"></div>
+                <div class="chart-bar-label">RED</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Congestion Score -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">🌡 Congestion Score</span>
+          </div>
+          <div class="panel-body" style="display:flex;align-items:center;gap:1.5rem">
+            <div class="congestion-score">
+              <div class="congestion-ring ring-low" id="congestionRing">
+                <div class="ring-inner" id="congestionRingVal">0%</div>
+              </div>
+              <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.4rem" id="congestionRingLabel">No Data</div>
+            </div>
+            <div style="flex:1">
+              <div style="font-size:0.82rem;color:var(--text-muted);line-height:1.8">
+                <div>🟢 0–30% → <strong>Low</strong></div>
+                <div>🟡 31–60% → <strong>Moderate</strong></div>
+                <div>🔴 61–100% → <strong>Critical</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Traffic Heatmap -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">🔥 Activity Heatmap</span>
+            <span style="font-size:0.75rem;color:var(--text-muted)">Last 49 events</span>
+          </div>
+          <div class="panel-body">
+            <div class="heatmap-grid" id="heatmapGrid">
+              <!-- Populated by JS -->
+            </div>
+            <div style="display:flex;gap:0.75rem;margin-top:0.75rem;font-size:0.72rem;color:var(--text-muted);align-items:center">
+              <span>Low</span>
+              <div style="display:flex;gap:3px">
+                <div style="width:14px;height:14px;border-radius:3px;background:rgba(0,200,83,0.2)"></div>
+                <div style="width:14px;height:14px;border-radius:3px;background:rgba(255,184,0,0.4)"></div>
+                <div style="width:14px;height:14px;border-radius:3px;background:rgba(255,45,45,0.6)"></div>
+                <div style="width:14px;height:14px;border-radius:3px;background:rgba(255,45,45,0.9)"></div>
+              </div>
+              <span>High</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /right col -->
+    </div><!-- /admin-grid -->
+
+    <!-- ── Map + Timeline Row ── -->
+    <div class="admin-grid" id="map-section">
+
+      <!-- Map -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">🗺️ Live City Map</span>
+          <span id="mapStatus" class="badge badge-green" style="font-size:0.72rem">● Active</span>
+        </div>
+        <div class="panel-body" style="padding:1rem">
+          <div id="map-admin"></div>
+        </div>
+      </div>
+
+      <!-- Activity Timeline / Emergency Log -->
+      <div class="panel" id="emergency">
+        <div class="panel-header">
+          <span class="panel-title">⚡ Activity Timeline</span>
+        </div>
+        <div class="panel-body" style="padding:0 1.5rem;max-height:350px;overflow-y:auto">
+          <div class="timeline" id="timeline">
+            <div class="empty-state">
+              <div class="empty-state-icon">🕐</div>
+              <div class="empty-state-text">No activity yet</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+</div><!-- /admin-layout -->
+
+<!-- Scripts -->
+<script src="firebase.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════
+   TraffiVerse AI — Admin Panel Logic
+   ═══════════════════════════════════════════════════════════ */
+'use strict';
+
+const $ = (s, ctx = document) => ctx.querySelector(s);
+const $$ = (s, ctx = document) => [...ctx.querySelectorAll(s)];
+
+/* ── Theme ── */
+function initTheme() {
+  const t = localStorage.getItem('tv_theme') || 'light';
+  setTheme(t);
+  $$('.theme-toggle').forEach(b => b.addEventListener('click', () => setTheme(State.theme === 'light' ? 'dark' : 'light')));
+}
+const State = { theme: 'light', events: [], filtered: [] };
+function setTheme(t) {
+  State.theme = t;
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('tv_theme', t);
+  $$('.theme-toggle').forEach(b => b.textContent = t === 'dark' ? '☀️' : '🌙');
+}
+
+/* ── Alert ── */
+function showAlert(type, title, msg, dur = 4000) {
+  const typeMap = { emergency:'alert-emergency', warning:'alert-warning', success:'alert-success', info:'alert-info' };
+  const banner = $('#alertBanner');
+  if (!banner) return;
+  banner.className = `alert-banner ${typeMap[type] || typeMap.info}`;
+  $('#alertTitle').textContent = title;
+  $('#alertMsg').textContent   = msg;
+  banner.classList.add('show');
+  clearTimeout(window._alertT);
+  window._alertT = setTimeout(() => banner.classList.remove('show'), dur);
+}
+$('#alertClose')?.addEventListener('click', () => $('#alertBanner')?.classList.remove('show'));
+
+/* ── Map ── */
+let adminMap = null;
+function initAdminMap() {
+  if (!window.L || !document.getElementById('map-admin')) return;
+  adminMap = L.map('map-admin', { center: [19.0760, 72.8777], zoom: 13, attributionControl: false });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(adminMap);
+
+  const locs = [
+    { pos: [19.0760, 72.8777], icon: '🚦', label: 'Main Signal — Junction A' },
+    { pos: [19.0790, 72.8810], icon: '🚦', label: 'Signal — Westbound' },
+    { pos: [19.0820, 72.8740], icon: '🏥', label: 'City General Hospital' },
+    { pos: [19.0730, 72.8750], icon: '🚔', label: 'Police Station Sector 5' },
+  ];
+  locs.forEach(l => {
+    L.marker(l.pos, {
+      icon: L.divIcon({ html: `<div style="font-size:1.5rem;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3))">${l.icon}</div>`, className:'', iconSize:[32,32], iconAnchor:[16,16] })
+    }).addTo(adminMap).bindPopup(`<strong>${l.label}</strong>`);
+  });
+}
+
+/* ── Data ── */
+async function loadData() {
+  try {
+    const events = await fetchTrafficData();
+    State.events = events;
+    State.filtered = [...events];
+    renderAll(events);
+    $('#lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (err) {
+    console.error(err);
+    showAlert('warning', 'Load Error', 'Could not load traffic data.');
+  }
+}
+
+function renderAll(events) {
+  renderStats(events);
+  renderTable(events);
+  renderChart(events);
+  renderHeatmap(events);
+  renderTimeline(events);
+  updateSidebarSignal(events);
+  updateCongestionRing(events);
+}
+
+/* ── Stats ── */
+function renderStats(events) {
+  const a = computeAnalytics(events);
+  animCount('#statTotal', a.total);
+  animCount('#statAvg', a.avgVehicles);
+  animCount('#statAmb', a.ambulanceCount);
+  animCount('#statRed', a.redCount);
+  $('#statDeltaTotal').textContent = `${a.total} total simulations`;
+  $('#statDeltaAvg').textContent   = `Max: ${a.maxVehicles} vehicles`;
+  $('#statDeltaAmb').textContent   = `${a.ambulanceCount > 0 ? '🚨 ' + a.ambulanceCount + ' emergencies' : 'No emergencies'}`;
+  $('#statDeltaRed').textContent   = `${a.greenCount} green, ${a.yellowCount} yellow`;
+}
+
+function animCount(sel, target) {
+  const el = $(sel);
+  if (!el) return;
+  const start = parseInt(el.textContent) || 0;
+  const diff  = target - start;
+  const steps = 20;
+  let i = 0;
+  const iv = setInterval(() => {
+    i++;
+    el.textContent = Math.round(start + (diff * i / steps));
+    if (i >= steps) { el.textContent = target; clearInterval(iv); }
+  }, 30);
+}
+
+/* ── Table ── */
+function renderTable(events) {
+  const tbody = $('#eventsTableBody');
+  if (!tbody) return;
+  if (!events.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">📡</div><div class="empty-state-text">No events recorded yet.<br>Run a simulation on the main page!</div></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = events.slice(0, 100).map((e, i) => `
+    <tr>
+      <td style="color:var(--text-muted);font-size:0.8rem">${i + 1}</td>
+      <td style="font-variant-numeric:tabular-nums;font-size:0.82rem">${formatTime(e.timestamp)}</td>
+      <td><strong>${e.vehicleCount}</strong></td>
+      <td><span class="badge ${signalBadge(e.signal)}">${e.signal}</span></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <div class="progress-bar" style="width:80px">
+            <div class="progress-fill" style="width:${congScore(e.vehicleCount)}%;background:${signalColor(e.signal)}"></div>
+          </div>
+          <span style="font-size:0.78rem;color:var(--text-muted)">${e.congestionLevel || '—'}</span>
+        </div>
+      </td>
+      <td>${e.isAmbulance ? '<span class="badge badge-red">🚑 EMR</span>' : '<span class="badge badge-orange">Normal</span>'}</td>
+      <td style="font-size:0.8rem;color:var(--text-muted);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.location || 'Junction A'}</td>
+    </tr>
+  `).join('');
+}
+
+/* ── Chart ── */
+function renderChart(events) {
+  const a = computeAnalytics(events);
+  const max = Math.max(a.greenCount, a.yellowCount, a.redCount, 1);
+  const toH = n => Math.max(4, Math.round((n / max) * 70));
+  setBar('#chartGreenBar',  toH(a.greenCount),  '#chartGreenVal',  a.greenCount);
+  setBar('#chartYellowBar', toH(a.yellowCount), '#chartYellowVal', a.yellowCount);
+  setBar('#chartRedBar',    toH(a.redCount),    '#chartRedVal',    a.redCount);
+}
+function setBar(barSel, h, valSel, val) {
+  const bar = $(barSel); const valEl = $(valSel);
+  if (bar) bar.style.height = h + 'px';
+  if (valEl) valEl.textContent = val;
+}
+
+/* ── Heatmap ── */
+function renderHeatmap(events) {
+  const grid = $('#heatmapGrid');
+  if (!grid) return;
+  const cells = Array.from({ length: 49 }, (_, i) => {
+    const e = events[i];
+    const v = e ? e.vehicleCount : 0;
+    const intensity = v === 0 ? 0 : v < 15 ? 1 : v < 30 ? 2 : v < 45 ? 3 : 4;
+    const colors = ['var(--gray-100)', 'rgba(0,200,83,0.25)', 'rgba(255,184,0,0.4)', 'rgba(255,45,45,0.55)', 'rgba(255,45,45,0.85)'];
+    const tip = e ? `${e.vehicleCount} vehicles — ${e.signal}` : 'No data';
+    return `<div class="heatmap-cell" style="background:${colors[intensity]}" data-tip="${tip}"></div>`;
+  });
+  grid.innerHTML = cells.join('');
+}
+
+/* ── Timeline ── */
+function renderTimeline(events) {
+  const tl = $('#timeline');
+  if (!tl) return;
+  if (!events.length) {
+    tl.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🕐</div><div class="empty-state-text">No activity yet</div></div>`;
+    return;
+  }
+  tl.innerHTML = events.slice(0, 20).map(e => {
+    const dotClass = e.isAmbulance ? 'dot-emr' : e.signal === 'GREEN' ? 'dot-green' : e.signal === 'YELLOW' ? 'dot-yellow' : 'dot-red';
+    const typeStr  = e.isAmbulance ? '🚑 Emergency — Signal forced GREEN' : `Signal: ${e.signal} · ${e.vehicleCount} vehicles`;
+    return `
+      <div class="timeline-item">
+        <div class="timeline-dot ${dotClass}"></div>
+        <div class="timeline-body">
+          <div class="timeline-title">${typeStr}</div>
+          <div class="timeline-sub">${e.location || 'Junction A'} · ${e.congestionLevel || '—'} congestion</div>
+        </div>
+        <div class="timeline-time">${formatTime(e.timestamp)}</div>
+      </div>`;
+  }).join('');
+}
+
+/* ── Sidebar Signal ── */
+function updateSidebarSignal(events) {
+  if (!events.length) return;
+  const latest = events[0];
+  const emojiMap = { GREEN: '🟢', YELLOW: '🟡', RED: '🔴' };
+  const el = $('#sidebarSignalLight');
+  const vl = $('#sidebarSignalVal');
+  const sl = $('#sidebarSignalSub');
+  if (el) el.textContent = emojiMap[latest.signal] || '🟢';
+  if (vl) { vl.textContent = latest.isAmbulance ? 'EMERGENCY' : (latest.signal || 'GREEN'); vl.style.color = signalColor(latest.signal); }
+  if (sl) sl.textContent = formatTime(latest.timestamp);
+}
+
+/* ── Congestion Ring ── */
+function updateCongestionRing(events) {
+  const a = computeAnalytics(events);
+  const ring  = $('#congestionRing');
+  const label = $('#congestionRingLabel');
+  const val   = $('#congestionRingVal');
+  if (!ring) return;
+  ring.className = 'congestion-ring ' + (a.congestionScore < 31 ? 'ring-low' : a.congestionScore < 61 ? 'ring-medium' : 'ring-high');
+  if (val)   val.textContent   = a.congestionScore + '%';
+  if (label) label.textContent = a.congestionLabel;
+}
+
+/* ── Filtering ── */
+function applyFilter() {
+  const sig = $('#filterSignal')?.value;
+  const amb = $('#filterAmb')?.checked;
+  let data = [...State.events];
+  if (sig) data = data.filter(e => e.signal === sig);
+  if (amb) data = data.filter(e => e.isAmbulance);
+  State.filtered = data;
+  renderTable(data);
+}
+
+/* ── Refresh ── */
+async function refreshData() {
+  const icon = $('#refreshIcon');
+  if (icon) icon.className = 'refreshing';
+  await loadData();
+  if (icon) icon.className = '';
+  showAlert('success', '✅ Refreshed', 'Traffic data updated successfully.');
+}
+
+/* ── Clear Data ── */
+function clearAllData() {
+  if (!confirm('Clear all local traffic data? (Firestore data is not deleted)')) return;
+  DemoStore.clear();
+  State.events   = [];
+  State.filtered = [];
+  renderAll([]);
+  showAlert('info', '🗑 Cleared', 'Local demo data has been cleared.');
+}
+
+/* ── Helpers ── */
+function formatTime(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit' }); }
+  catch { return '—'; }
+}
+function signalBadge(s) {
+  return s === 'GREEN' ? 'badge-green' : s === 'YELLOW' ? 'badge-yellow' : s === 'RED' ? 'badge-red' : 'badge-orange';
+}
+function signalColor(s) {
+  return s === 'GREEN' ? '#00C853' : s === 'YELLOW' ? '#FFB800' : '#FF2D2D';
+}
+function congScore(v) {
+  if (v < 15) return Math.round((v/14)*30);
+  if (v < 30) return Math.round(30 + ((v-15)/14)*35);
+  return Math.min(100, Math.round(65 + ((v-30)/20)*35));
+}
+
+/* ── Init ── */
+document.addEventListener('DOMContentLoaded', async () => {
+  initTheme();
+  setTimeout(initAdminMap, 200);
+  await loadData();
+
+  // Real-time subscription
+  subscribeToTraffic(events => {
+    State.events = events;
+    applyFilter();
+    renderTimeline(events);
+    updateSidebarSignal(events);
+    renderStats(events);
+    renderChart(events);
+    renderHeatmap(events);
+    updateCongestionRing(events);
+    $('#lastUpdated').textContent = 'Live · ' + new Date().toLocaleTimeString();
+  });
+
+  // Seed demo data if empty
+  setTimeout(seedDemoData, 1200);
+});
+
+/* ── Demo Data Seed ── */
+async function seedDemoData() {
+  const existing = await fetchTrafficData();
+  if (existing.length > 0) return; // Already has data
+
+  const seeds = [
+    { vehicleCount: 8,  signal: 'GREEN',  isAmbulance: false, congestionLevel: 'Low',      location: 'Junction A — Mumbai Demo' },
+    { vehicleCount: 22, signal: 'YELLOW', isAmbulance: false, congestionLevel: 'Moderate',  location: 'Junction A — Mumbai Demo' },
+    { vehicleCount: 37, signal: 'RED',    isAmbulance: false, congestionLevel: 'High',      location: 'Junction A — Mumbai Demo' },
+    { vehicleCount: 5,  signal: 'GREEN',  isAmbulance: true,  congestionLevel: 'Low',       location: 'Junction A — Mumbai Demo' },
+    { vehicleCount: 14, signal: 'GREEN',  isAmbulance: false, congestionLevel: 'Low',       location: 'Junction A — Mumbai Demo' },
+    { vehicleCount: 28, signal: 'YELLOW', isAmbulance: false, congestionLevel: 'Moderate',  location: 'Junction A — Mumbai Demo' },
+    { vehicleCount: 45, signal: 'RED',    isAmbulance: false, congestionLevel: 'High',      location: 'Junction A — Mumbai Demo' },
+  ];
+
+  for (const s of seeds) {
+    await saveTrafficData(s);
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  await loadData();
+  showAlert('info', '📦 Demo Data Loaded', 'Sample traffic events have been seeded for preview.');
+}
+</script>
+</body>
+</html>

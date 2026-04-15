@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TraffiVerse AI — Smart Traffic Management</title>
+  <meta name="description" content="AI-powered traffic signal management with real-time monitoring, ambulance detection, and emergency response." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet Maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Firebase (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <!-- App Styles -->
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    /* ── Page-specific styles ── */
+
+    /* Hero */
+    .hero {
+      min-height: 100vh;
+      padding: 7rem 2rem 4rem;
+      display: flex;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 70% 50%, rgba(255,107,26,0.07) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 20% 80%, rgba(255,107,26,0.04) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .hero-grid-bg {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,107,26,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,107,26,0.05) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+    }
+
+    .hero-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 1280px;
+      margin: 0 auto;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--orange-glow);
+      border: 1px solid rgba(255,107,26,0.2);
+      border-radius: 100px;
+      padding: 0.35rem 1rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--orange);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 1.25rem;
+    }
+
+    .hero-title {
+      font-size: clamp(2.5rem, 5vw, 3.8rem);
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 1.25rem;
+      color: var(--text);
+    }
+
+    .hero-title span { color: var(--orange); }
+
+    .hero-desc {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+      margin-bottom: 2.5rem;
+      max-width: 480px;
+    }
+
+    .hero-cta { display: flex; gap: 1rem; flex-wrap: wrap; }
+
+    /* Stats row */
+    .hero-stats {
+      display: flex;
+      gap: 2rem;
+      margin-top: 3rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+    }
+    .hero-stat-item { display: flex; flex-direction: column; gap: 0.2rem; }
+    .hero-stat-val  { font-family: 'Syne', sans-serif; font-size: 1.6rem; font-weight: 800; color: var(--orange); }
+    .hero-stat-lbl  { font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+    /* Simulation Panel */
+    .sim-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 2rem;
+      box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255,107,26,0.05);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sim-panel::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--orange), var(--orange-light), var(--orange-dark));
+    }
+
+    .sim-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.75rem;
+    }
+
+    .sim-title { font-family: 'Syne', sans-serif; font-size: 1.15rem; font-weight: 700; }
+    .sim-live { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--green); font-weight: 600; }
+    .sim-live-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; animation: pulse-dot 1.5s ease-in-out infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(1.3)} }
+
+    /* Quick-add buttons */
+    .quick-add {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.25rem;
+    }
+    .quick-add-btn {
+      padding: 0.4rem 0.85rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+      transition: all var(--transition);
+      font-family: 'DM Sans', sans-serif;
+    }
+    .quick-add-btn:hover { border-color: var(--orange); color: var(--orange); background: var(--orange-glow); }
+
+    /* Slider */
+    .vehicle-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(to right, var(--orange) 0%, var(--orange) var(--progress, 0%), var(--gray-200) var(--progress, 0%));
+      outline: none;
+      margin: 0.75rem 0;
+      cursor: pointer;
+    }
+    .vehicle-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--orange);
+      box-shadow: 0 0 0 4px var(--orange-glow);
+      cursor: pointer;
+      transition: box-shadow var(--transition);
+    }
+    .vehicle-slider::-webkit-slider-thumb:hover { box-shadow: 0 0 0 8px var(--orange-glow); }
+
+    /* Ambulance toggle */
+    .ambulance-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1rem;
+      border-radius: var(--radius);
+      border: 2px solid var(--border);
+      background: var(--bg);
+      cursor: pointer;
+      transition: all var(--transition);
+      margin-bottom: 1.25rem;
+    }
+    .ambulance-toggle:hover { border-color: #FF2D2D; background: rgba(255,45,45,0.04); }
+    .ambulance-toggle input[type="checkbox"] { display: none; }
+    .ambulance-toggle .toggle-knob {
+      width: 40px; height: 22px;
+      background: var(--gray-200);
+      border-radius: 11px;
+      position: relative;
+      transition: background var(--transition);
+      flex-shrink: 0;
+    }
+    .ambulance-toggle .toggle-knob::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      transition: transform var(--transition);
+    }
+    .ambulance-toggle.checked .toggle-knob { background: #FF2D2D; }
+    .ambulance-toggle.checked .toggle-knob::after { transform: translateX(18px); }
+
+    .toggle-text { flex: 1; }
+    .toggle-label { font-weight: 600; font-size: 0.9rem; display: block; }
+    .toggle-sub   { font-size: 0.78rem; color: var(--text-muted); }
+
+    /* Signal buttons row */
+    .sim-actions { display: flex; gap: 0.75rem; }
+    .sim-actions .btn { flex: 1; justify-content: center; }
+
+    /* ── Result Box ── */
+    .result-section { margin-top: 2.5rem; }
+    .result-box {
+      background: var(--surface-2);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      transition: all var(--transition);
+    }
+    .result-box[data-signal="GREEN"]  { border-color: rgba(0,200,83,0.4); background: rgba(0,200,83,0.05); }
+    .result-box[data-signal="YELLOW"] { border-color: rgba(255,184,0,0.4); background: rgba(255,184,0,0.05); }
+    .result-box[data-signal="RED"]    { border-color: rgba(255,45,45,0.4); background: rgba(255,45,45,0.05); }
+
+    .result-info { flex: 1; }
+    .result-signal-label {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 0.4rem;
+    }
+    .result-signal-desc { font-size: 0.88rem; color: var(--text-muted); line-height: 1.5; }
+
+    /* Congestion meter */
+    .congestion-meter { margin-top: 1rem; }
+    .congestion-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+      font-weight: 600;
+    }
+
+    /* Vehicle counter ticker */
+    .vehicle-ticker {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      align-items: baseline;
+      gap: 0.4rem;
+      margin-top: 1rem;
+    }
+    .ticker-val { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; color: var(--orange); }
+    .ticker-lbl { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+
+    /* ── Sections ── */
+    .section { padding: 5rem 2rem; }
+    .section-alt { background: var(--surface); }
+
+    .section-head { margin-bottom: 3rem; text-align: center; }
+    .section-title { font-size: 2rem; color: var(--text); margin-bottom: 0.75rem; }
+    .section-sub { color: var(--text-muted); max-width: 560px; margin: 0 auto; line-height: 1.7; }
+
+    /* ── Map Section ── */
+    .map-section { padding: 4rem 2rem; }
+    .map-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      margin-top: 1.25rem;
+      justify-content: center;
+    }
+    .legend-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-muted); }
+
+    /* Leaflet marker override */
+    .map-marker {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      border: 3px solid #fff;
+    }
+    .map-marker-signal  { background: var(--orange); }
+    .map-marker-hospital{ background: #00C853; }
+    .map-marker-police  { background: #2D6BE4; }
+    .map-marker-ambulance { background: #FF2D2D; animation: pulse-dot 1s ease-in-out infinite; }
+
+    /* ── Feature Cards ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.75rem;
+      transition: all var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+    .feature-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--orange), transparent);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform var(--transition);
+    }
+    .feature-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); border-color: rgba(255,107,26,0.25); }
+    .feature-card:hover::after { transform: scaleX(1); }
+
+    .feature-icon { font-size: 2rem; margin-bottom: 1rem; display: block; }
+    .feature-title { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; font-family: 'Syne', sans-serif; }
+    .feature-desc  { font-size: 0.88rem; color: var(--text-muted); line-height: 1.6; }
+
+    /* ── Recent Events Feed ── */
+    .feed-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    .feed-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+    }
+    .feed-panel-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .feed-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.88rem;
+    }
+    .feed-item:last-child { border-bottom: none; }
+    .feed-signal {
+      font-weight: 700;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .feed-signal[data-signal="GREEN"]  { background: rgba(0,200,83,0.12); color: #00962F; }
+    .feed-signal[data-signal="YELLOW"] { background: rgba(255,184,0,0.12); color: #997000; }
+    .feed-signal[data-signal="RED"]    { background: rgba(255,45,45,0.12); color: #C0000E; }
+    .feed-count { flex: 1; color: var(--text-muted); }
+    .feed-time  { font-size: 0.78rem; color: var(--gray-400); font-variant-numeric: tabular-nums; }
+    .empty-feed { color: var(--text-muted); font-size: 0.88rem; text-align: center; padding: 2rem 0; }
+
+    /* Ambulance strip */
+    .ambulance-strip {
+      position: relative;
+      height: 50px;
+      background: linear-gradient(90deg, #1a1a1a, #2d2d2d, #1a1a1a);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 1rem;
+      display: none;
+    }
+
+    /* ── Footer ── */
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 2.5rem 2rem;
+      text-align: center;
+    }
+    .footer-logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.1rem; color: var(--text); margin-bottom: 0.5rem; }
+    .footer-logo span { color: var(--orange); }
+    .footer-copy { font-size: 0.82rem; color: var(--text-muted); }
+    .footer-links { display: flex; justify-content: center; gap: 1.5rem; margin-top: 1rem; }
+    .footer-links a { font-size: 0.82rem; color: var(--text-muted); transition: color var(--transition); }
+    .footer-links a:hover { color: var(--orange); }
+
+    /* ── Emergency flash ── */
+    @keyframes emergency-flash {
+      0%,100%{ box-shadow: 0 0 0 0 rgba(255,45,45,0.4); }
+      50%    { box-shadow: 0 0 0 20px rgba(255,45,45,0); }
+    }
+    .emergency-flash { animation: emergency-flash 0.5s ease 6; }
+
+    /* Input pulse */
+    @keyframes inputPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.02)} }
+    .input-pulse { animation: inputPulse 0.4s ease; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .hero-inner { grid-template-columns: 1fr; gap: 2.5rem; }
+      .feed-grid  { grid-template-columns: 1fr; }
+      .hero-stats { gap: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════
+     ALERT BANNER (fixed, top)
+     ════════════════════════════════════════════════════════ -->
+<div id="alertBanner" class="alert-banner" role="alert" aria-live="assertive">
+  <div class="alert-icon">🚦</div>
+  <div class="alert-content">
+    <div class="alert-title" id="alertTitle">Alert</div>
+    <div class="alert-msg"   id="alertMsg">—</div>
+  </div>
+  <button class="alert-close" id="alertClose" aria-label="Close alert">✕</button>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     NAVIGATION
+     ════════════════════════════════════════════════════════ -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">
+      <div class="nav-logo-icon">🚦</div>
+      Traffi<span>Verse</span> AI
+    </a>
+
+    <ul class="nav-links">
+      <li><a href="index.html" class="active">Dashboard</a></li>
+      <li><a href="#map-section">Live Map</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="admin.html">Admin Panel</a></li>
+    </ul>
+
+    <div class="nav-actions">
+      <button class="theme-toggle" aria-label="Toggle theme">🌙</button>
+      <a href="admin.html" class="btn btn-primary btn-sm">Admin Panel →</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════
+     HERO SECTION
+     ════════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid-bg"></div>
+
+  <div class="hero-inner">
+    <!-- Left: Content -->
+    <div class="hero-content">
+      <div class="hero-eyebrow animate-fade-up delay-1">
+        ⚡ AI-Powered Traffic Intelligence
+      </div>
+
+      <h1 class="hero-title animate-fade-up delay-2">
+        Smart Traffic.<br>
+        <span>Zero Congestion.</span><br>
+        Real AI.
+      </h1>
+
+      <p class="hero-desc animate-fade-up delay-3">
+        TraffiVerse AI uses real-time vehicle detection, ambulance prioritization,
+        and adaptive signal control to keep cities moving — intelligently.
+      </p>
+
+      <div class="hero-cta animate-fade-up delay-4">
+        <a href="#simulate" class="btn btn-primary btn-lg">Start Simulation</a>
+        <a href="admin.html" class="btn btn-outline btn-lg">View Dashboard</a>
+      </div>
+
+      <div class="hero-stats animate-fade-up delay-5">
+        <div class="hero-stat-item">
+          <span class="hero-stat-val" id="vehicleTicker">0</span>
+          <span class="hero-stat-lbl">Vehicles Tracked</span>
+        </div>
+        <div class="hero-stat-item">
+          <span class="hero-stat-val">99.2%</span>
+          <span class="hero-stat-lbl">Signal Accuracy</span>
+        </div>
+        <div class="hero-stat-item">
+          <span class="hero-stat-val">&lt;0.2s</span>
+          <span class="hero-stat-lbl">Response Time</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Simulation Panel -->
+    <div id="simulate">
+      <div class="sim-panel animate-fade-up delay-3">
+        <div class="sim-header">
+          <span class="sim-title">🚦 Traffic Simulator</span>
+          <span class="sim-live"><span class="sim-live-dot"></span> LIVE</span>
+        </div>
+
+        <!-- Quick-add buttons -->
+        <div class="input-group" style="margin-bottom:1rem">
+          <label class="input-label">Quick Add Vehicles</label>
+          <div class="quick-add">
+            <button class="quick-add-btn" onclick="addVehicles(1)">+1 🚗</button>
+            <button class="quick-add-btn" onclick="addVehicles(5)">+5 🚌</button>
+            <button class="quick-add-btn" onclick="addVehicles(10)">+10 🚛</button>
+            <button class="quick-add-btn" onclick="addVehicles(20)">+20 🚦</button>
+            <button class="quick-add-btn" style="color:#FF2D2D;border-color:rgba(255,45,45,0.3)" onclick="resetVehicles()">Reset ✕</button>
+          </div>
+        </div>
+
+        <!-- Vehicle Count Input -->
+        <div class="input-group" style="margin-bottom:0.5rem">
+          <label class="input-label" for="vehicleInput">Number of Vehicles</label>
+          <input
+            type="number"
+            id="vehicleInput"
+            class="input-field"
+            placeholder="Enter vehicle count (e.g. 25)"
+            min="0"
+            max="9999"
+            autocomplete="off"
+          />
+        </div>
+
+        <!-- Range slider -->
+        <input
+          type="range"
+          id="vehicleSlider"
+          class="vehicle-slider"
+          min="0"
+          max="100"
+          value="0"
+          aria-label="Vehicle count slider"
+        />
+
+        <!-- Ambulance Toggle -->
+        <label class="ambulance-toggle" id="ambulanceToggleLabel" onclick="toggleAmbulanceUI(this)">
+          <input type="checkbox" id="ambulanceCheck" />
+          <div class="toggle-knob"></div>
+          <div class="toggle-text">
+            <span class="toggle-label">🚑 Ambulance Detection</span>
+            <span class="toggle-sub">Force GREEN signal for emergency vehicle</span>
+          </div>
+        </label>
+
+        <!-- Action buttons -->
+        <div class="sim-actions">
+          <button id="simulateBtn" class="btn btn-primary" onclick="simulateTraffic()">
+            ▶ Simulate Traffic
+          </button>
+          <button id="ambulanceBtn" class="btn btn-danger btn-sm" title="Trigger ambulance emergency">
+            🚑 Emergency
+          </button>
+          <button id="autoSimBtn" class="btn btn-outline btn-sm" title="Auto-simulate every 6 seconds">
+            ⚡ Auto
+          </button>
+        </div>
+
+        <!-- Ambulance Route Strip -->
+        <div class="ambulance-strip" id="ambulanceStrip"></div>
+
+        <!-- ── Result Box ── -->
+        <div class="result-section">
+          <div class="result-box" id="resultBox">
+            <!-- Signal Housing -->
+            <div class="signal-housing" id="signalHousing">
+              <div class="signal-light" id="light-red"></div>
+              <div class="signal-light active-green" id="light-yellow"></div>
+              <div class="signal-light" id="light-green"></div>
+            </div>
+
+            <!-- Signal Info -->
+            <div class="result-info">
+              <div class="result-signal-label" id="signalLabel">🟢 GO</div>
+              <div class="result-signal-desc"  id="signalDesc">Run a simulation to see the signal result.</div>
+
+              <!-- Congestion Meter -->
+              <div class="congestion-meter">
+                <div class="congestion-meta">
+                  <span id="congestionLabel">Congestion</span>
+                  <span id="congestionPct">0%</span>
+                </div>
+                <div class="progress-bar">
+                  <div class="progress-fill" id="congestionBar" style="width:0%"></div>
+                </div>
+              </div>
+
+              <!-- Vehicle ticker -->
+              <div class="vehicle-ticker">
+                <span class="ticker-val" id="vehicleTicker2">0</span>
+                <span class="ticker-lbl">vehicles in zone</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /sim-panel -->
+    </div>
+  </div><!-- /hero-inner -->
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     FEATURES SECTION
+     ════════════════════════════════════════════════════════ -->
+<section class="section" id="features">
+  <div class="container">
+    <div class="section-head">
+      <div class="section-eyebrow">What TraffiVerse Does</div>
+      <h2 class="section-title">Every Feature You Need</h2>
+      <p class="section-sub">From ambulance priority routing to real-time Firestore logging — built for real-world deployments.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card animate-fade-up delay-1">
+        <span class="feature-icon">🤖</span>
+        <div class="feature-title">AI Signal Control</div>
+        <p class="feature-desc">Adaptive signal switching based on real-time vehicle density. GREEN, YELLOW, RED — automatically assigned.</p>
+      </div>
+      <div class="feature-card animate-fade-up delay-2">
+        <span class="feature-icon">🚑</span>
+        <div class="feature-title">Ambulance Detection</div>
+        <p class="feature-desc">Emergency vehicle detected? Signal instantly goes GREEN. Nearby hospital and police are auto-notified.</p>
+      </div>
+      <div class="feature-card animate-fade-up delay-3">
+        <span class="feature-icon">🗺️</span>
+        <div class="feature-title">Live Map View</div>
+        <p class="feature-desc">Leaflet.js powered map with real-time signal markers, hospital/police locations, and animated ambulance routes.</p>
+      </div>
+      <div class="feature-card animate-fade-up delay-4">
+        <span class="feature-icon">🔥</span>
+        <div class="feature-title">Firebase Firestore</div>
+        <p class="feature-desc">Every traffic event is persisted to Firestore with vehicle count, signal state, and timestamp for full auditability.</p>
+      </div>
+      <div class="feature-card animate-fade-up delay-1">
+        <span class="feature-icon">📊</span>
+        <div class="feature-title">Analytics Dashboard</div>
+        <p class="feature-desc">Admin panel with congestion scores, signal distribution, peak vehicle counts, and emergency event logs.</p>
+      </div>
+      <div class="feature-card animate-fade-up delay-2">
+        <span class="feature-icon">🌙</span>
+        <div class="feature-title">Dark / Light Mode</div>
+        <p class="feature-desc">Full theme toggle persisted to localStorage. Beautiful in both modes — for day and night shift operators.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     MAP SECTION
+     ════════════════════════════════════════════════════════ -->
+<section class="map-section section-alt" id="map-section">
+  <div class="container">
+    <div class="section-head">
+      <div class="section-eyebrow">Live City Map</div>
+      <h2 class="section-title">See the Grid in Action</h2>
+      <p class="section-sub">Interact with the live map. Markers show active signal junctions, hospitals, and police stations. Trigger an ambulance to see the route animate.</p>
+    </div>
+
+    <!-- Map -->
+    <div id="map"></div>
+
+    <div class="map-legend">
+      <div class="legend-item"><span>🚦</span> Traffic Signal</div>
+      <div class="legend-item"><span>🏥</span> Hospital</div>
+      <div class="legend-item"><span>🚔</span> Police Station</div>
+      <div class="legend-item"><span>🚑</span> Ambulance Route</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     RECENT EVENTS FEED
+     ════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="container">
+    <div class="section-head">
+      <div class="section-eyebrow">Activity</div>
+      <h2 class="section-title">Recent Traffic Events</h2>
+      <p class="section-sub">Live feed from Firestore — updates in real time as simulations run.</p>
+    </div>
+
+    <div class="feed-grid">
+      <div class="feed-panel">
+        <div class="feed-panel-title">📡 Live Event Feed</div>
+        <div id="recentFeed">
+          <p class="empty-feed">No events yet. Run a simulation!</p>
+        </div>
+      </div>
+
+      <div class="feed-panel">
+        <div class="feed-panel-title">ℹ️ How It Works</div>
+        <div style="font-size:0.88rem;color:var(--text-muted);line-height:1.8">
+          <p style="margin-bottom:0.75rem">1️⃣ Enter a vehicle count (or use Quick Add buttons)</p>
+          <p style="margin-bottom:0.75rem">2️⃣ Toggle Ambulance Detection for emergency mode</p>
+          <p style="margin-bottom:0.75rem">3️⃣ Click <strong>Simulate Traffic</strong> — signal updates instantly</p>
+          <p style="margin-bottom:0.75rem">4️⃣ Data is saved to Firebase Firestore automatically</p>
+          <p>5️⃣ Visit <a href="admin.html" style="color:var(--orange);font-weight:600">Admin Panel →</a> for full analytics</p>
+        </div>
+        <div style="margin-top:1.5rem">
+          <div class="badge badge-orange" style="margin-bottom:0.5rem">Signal Logic</div>
+          <div style="font-size:0.82rem;color:var(--text-muted);line-height:1.8">
+            <div>🟢 <strong>0–14 vehicles</strong> → GREEN (clear)</div>
+            <div>🟡 <strong>15–29 vehicles</strong> → YELLOW (caution)</div>
+            <div>🔴 <strong>30+ vehicles</strong> → RED (stop)</div>
+            <div>🚑 <strong>Ambulance</strong> → GREEN always</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     FOOTER
+     ════════════════════════════════════════════════════════ -->
+<footer>
+  <div class="footer-logo">Traffi<span>Verse</span> AI</div>
+  <p class="footer-copy">AI-Powered Traffic Management System &mdash; Built for smart cities.</p>
+  <div class="footer-links">
+    <a href="index.html">Home</a>
+    <a href="admin.html">Admin Panel</a>
+    <a href="#features">Features</a>
+    <a href="#map-section">Live Map</a>
+  </div>
+</footer>
+
+<!-- ════════════════════════════════════════════════════════
+     SCRIPTS
+     ════════════════════════════════════════════════════════ -->
+<script src="firebase.js"></script>
+<script src="app.js"></script>
+<script>
+  // Ambulance toggle UI helper
+  function toggleAmbulanceUI(label) {
+    const cb = label.querySelector('input[type="checkbox"]');
+    if (cb) {
+      cb.checked = !cb.checked;
+      label.classList.toggle('checked', cb.checked);
+    }
+  }
+
+  // Sync vehicle ticker in hero + result box
+  const origAnimateCounter = animateCounter;
+  document.addEventListener('DOMContentLoaded', () => {
+    const origFn = window.animateCounter;
+    // Also sync hero ticker
+    const origSim = window.simulateTraffic;
+    if (origSim) {
+      const _sim = origSim.bind(window);
+      window.simulateTraffic = async function() {
+        await _sim();
+        const v2 = document.getElementById('vehicleTicker2');
+        const v1 = document.getElementById('vehicleTicker');
+        if (v1 && v2) v1.textContent = v2.textContent;
+      };
+    }
+  });
+</script>
+
+</body>
+</html>
