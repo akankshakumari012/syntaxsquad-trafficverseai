@@ -185,7 +185,8 @@ async function simulateTraffic() {
     showAlert('warning', '⚠️ Too Many Vehicles', 'Please enter a count under 10,000.'); return;
   }
 
-  const isAmbulance = ambCheck?.checked || false;
+const isAmbulance = document.getElementById('ambulanceCheck')?.checked === true;
+console.log("isAmbulance:", isAmbulance);
 
   // UI: loading state
   State.isSimulating = true;
